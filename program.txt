@@ -1,0 +1,45 @@
+; --- Corrected Assembly Program (v2) ---
+; Fixes the infinite loop bug.
+
+INP A
+INP B
+ADD A, B
+OUT A
+STA A, 10
+
+SET C, #0
+LDA C, 10
+OUT C
+
+SET A, #123
+STA A, 11
+LDA B, 11
+OUT B
+
+SET A, #20
+MOV B, A
+INC B
+DEC A
+SUB B, A
+OUT B
+
+; --- Corrected Countdown Loop ---
+SET C, #3        ; Line 18: Initialize counter (done only ONCE)
+
+; Loop starts here
+OUT C            ; Line 19: Print the current value of C
+DEC C            ; Line 20: Decrement C
+JNZ C, 19        ; Line 21: If C is not zero, jump back to the OUT instruction (line 19)
+
+; This part of the code is now reachable after the loop finishes (when C becomes 0)
+OUT C            ; Line 22: Will print the final value of C, which is 0
+
+SET A, #0
+SET B, #77
+JZ A, 27         ; Jumps to line 27 (CLRM) because A is zero (NOTE: line number updated)
+OUT B            ; This line will be SKIPPED
+OUT A            ; This line will be SKIPPED
+
+CLRM             ; Line 27: Clear all memory to zeros
+DMP
+HLT
