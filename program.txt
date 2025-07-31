@@ -1,0 +1,39 @@
+INP A
+INP B
+ADD A, B
+OUT A
+STA A, 10
+
+SET C, #0
+LDA C, 10
+OUT C
+
+SET A, #123
+STA A, 11
+LDA B, 11
+OUT B
+
+SET A, #20
+MOV B, A
+INC B
+DEC A
+SUB B, A
+OUT B
+
+SET C, #3
+
+OUT C
+DEC C
+JNZ C, 19
+
+OUT C 
+
+SET A, #0
+SET B, #77
+JZ A, 27
+OUT B            
+OUT A            
+
+CLRM             
+DMP
+HLT
