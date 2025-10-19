@@ -6,23 +6,33 @@
 #include <stdint.h> // For uint16_t
 
 // --- Configuration Constants ---
-#define MEMORY_SIZE 64          // Must match the architecture your code was assembled for
-#define PROGRAM_SIZE 256        // Maximum number of instructions
-#define MAX_FILENAME_LENGTH 256
-#define NUM_REGISTERS 3
+#define MEMORY_SIZE 256             // The total size of the main memory.
+#define PROGRAM_SIZE 256            // Maximum number of instructions in a program.
+#define MAX_FILENAME_LENGTH 256     // Maximum length for file paths.
+#define NUM_REGISTERS 8             // The number of general-purpose registers.
+#define STACK_TOP (MEMORY_SIZE - 1) // The stack grows downwards from the top of memory.
 
 // --- Core Data Structures ---
+// Holds the state of the CPU's general-purpose registers.
 typedef struct {
-    int A;
-    int B;
-    int C;
+    int EAX, EBX, ECX, EDX;
+    int ESI, EDI;
+    int EBP, ESP;
 } Registers;
 
+// Holds the state of the CPU's flags.
+typedef struct {
+    int ZF; // Zero Flag
+    int SF; // Sign Flag
+} Flags;
+
 // --- Global State ---
-Registers registers = { 0, 0, 0 };
-int memory[MEMORY_SIZE];
-uint16_t machine_code[PROGRAM_SIZE] = { 0 };
-int program_instruction_count = 0;
+Registers registers = { 0 }; // The CPU registers.
+Flags flags = { 0 }; // The CPU flags.
+const char* register_names[] = { "EAX", "EBX", "ECX", "EDX", "ESI", "EDI", "EBP", "ESP" }; // Names of the registers for printing.
+int memory[MEMORY_SIZE]; // The main memory.
+uint16_t machine_code[PROGRAM_SIZE] = { 0 }; // Buffer for the machine code.
+int program_instruction_count = 0; // The number of instructions in the loaded program.
 
 // --- Function Prototypes ---
 void dump_contents();
@@ -35,40 +45,30 @@ void write_memory(int address, int data);
 int  read_memory(int address);
 
 // --- Main Function ---
-int main() {
-    char binary_filename[MAX_FILENAME_LENGTH];
-
-    printf("--- 16-bit CPU Simulator ---\n");
-    printf("Enter the binary program filename to run (e.g., program.bin): ");
-    if (!fgets(binary_filename, sizeof(binary_filename), stdin)) {
-        fprintf(stderr, "[Fatal Error] Failed to read filename.\n");
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <binary file>\n", argv[0]);
         return 1;
     }
-    binary_filename[strcspn(binary_filename, "\r\n")] = 0;
 
-    if (load_binary_program(binary_filename) < 0) {
+    if (load_binary_program(argv[1]) < 0) {
         fprintf(stderr, "[Fatal Error] Could not load binary file. Exiting.\n");
         return 1;
     }
 
-    printf("\nStarting program execution...\n-----------------------------\n");
     run_program();
-
-    printf("\n-----------------------------\nExecution finished.\n");
-    dump_contents(); // Dump final state
 
     return 0;
 }
 
 int load_binary_program(const char* filename) {
-    FILE* f = fopen(filename, "rb"); // Open in "read binary" mode
+    FILE* f = fopen(filename, "rb");
     if (f == NULL) {
         perror("[Loader Error] Failed to open binary file");
         return -1;
     }
 
-    // Read the entire file into the machine_code buffer
-    // fread returns the number of items read.
+    // Read the binary file into the machine code buffer.
     size_t instructions_read = fread(machine_code, sizeof(uint16_t), PROGRAM_SIZE, f);
     if (instructions_read == 0 && !feof(f)) {
         fprintf(stderr, "[Loader Error] An error occurred while reading the file.\n");
@@ -83,86 +83,151 @@ int load_binary_program(const char* filename) {
 }
 
 void run_program() {
-    int pc = 0; // Program Counter starts at 0
-    memset(memory, 0, sizeof(memory)); // Clear main memory before run
+    int pc = 0; // The program counter starts at 0.
+    memset(memory, 0, sizeof(memory)); // Clear main memory before execution.
+    registers.ESP = STACK_TOP + 1; // ESP starts just above the highest memory address.
+    registers.EBP = registers.ESP;
 
     while (pc >= 0 && pc < program_instruction_count) {
         int next_pc = execute_instruction(machine_code[pc], pc);
         pc = next_pc;
     }
-
-    if (pc >= program_instruction_count) {
-        printf("--- Program finished: Reached end of instructions ---\n");
-    }
 }
 
 int execute_instruction(uint16_t instruction, int pc) {
-    // Decode the instruction using bitwise operations
-    uint16_t opcode = instruction >> 11;             // Get top 5 bits
-    uint16_t reg1 = (instruction >> 9) & 0x03;       // Get bits 10-9 (0b11 = 3)
-    uint16_t reg2 = (instruction >> 7) & 0x03;       // Get bits 8-7
-    uint16_t value = instruction & 0x1FF;            // Get bottom 9 bits for I-Type
-    uint16_t addr = instruction & 0x1FF;             // Alias for clarity
+    uint16_t opcode = instruction >> 11;
 
-    // --- INSTRUCTION DISPATCH ---
+    // Handle base+offset addressing for MOV instructions.
+    if (opcode == 0b01111 || opcode == 0b11111) {
+        uint16_t reg_dest_src = (instruction >> 8) & 0x07;
+        uint16_t reg_base = (instruction >> 5) & 0x07;
+        uint16_t offset = instruction & 0x1F;
+        int effective_address = get_register_value(reg_base) + offset;
+
+        if (opcode == 0b01111) { // MOV reg, [reg+off]
+            set_register_value(reg_dest_src, read_memory(effective_address));
+        } else { // MOV [reg+off], reg
+            write_memory(effective_address, get_register_value(reg_dest_src));
+        }
+        return pc + 1;
+    }
+
+    // Decode the instruction's operands.
+    uint16_t reg1 = (instruction >> 8) & 0x07;
+    uint16_t reg2 = (instruction >> 5) & 0x07;
+    uint16_t value = instruction & 0xFF;
+    uint16_t addr = instruction & 0xFF;
+
+    // Dispatch the instruction based on its opcode.
     switch (opcode) {
-        case 0b00000: /* HLT */ printf("--- HLT instruction at PC %d ---\n", pc); return -1;
-        case 0b00001: /* DMP */ dump_contents(); break;
-        case 0b00010: /* CLRM */ memset(memory, 0, sizeof(memory)); break;
-        case 0b00011: /* CLRR */ registers.A = registers.B = registers.C = 0; break;
-
-        case 0b00100: /* INP */ {
+        // System & Memory
+        case 0b00000: printf("--- HLT instruction at PC %d ---\n", pc); return -1;
+        case 0b00001: set_register_value(reg1, get_register_value(reg1) * get_register_value(reg2)); break;
+        case 0b00010: {
+            int divisor = get_register_value(reg2);
+            if (divisor == 0) {
+                fprintf(stderr, "[Runtime Error] Division by zero at PC %d.\n", pc);
+                return -1; // Halt on error.
+            }
+            set_register_value(reg1, get_register_value(reg1) / divisor);
+            break;
+        }
+        case 0b00011: set_register_value(reg1, get_register_value(reg1) ^ get_register_value(reg2)); break;
+        case 0b00100: {
             int input_val;
-            printf("INPUT required for register %c: ", 'A' + reg1);
+            printf("INPUT required for register %s: ", register_names[reg1]);
             if (scanf("%d", &input_val) != 1) {
                 fprintf(stderr, "[Runtime Error] Invalid integer input.\n");
-                while (getchar() != '\n'); // Clear buffer
-                set_register_value(reg1, 0);
+                while (getchar() != '\n'); set_register_value(reg1, 0);
             } else {
                 set_register_value(reg1, input_val);
-                while (getchar() != '\n'); // Clear buffer
+                while (getchar() != '\n');
             }
             break;
         }
-        case 0b00101: /* OUT */ printf("OUTPUT from register %c: %d\n", 'A' + reg1, get_register_value(reg1)); break;
-        case 0b00110: /* SET */ set_register_value(reg1, value); break;
-        case 0b00111: /* LDA */ set_register_value(reg1, read_memory(addr)); break;
-        case 0b01000: /* STA */ write_memory(addr, get_register_value(reg1)); break;
+        case 0b00101: printf("OUTPUT from register %s: %d\n", register_names[reg1], get_register_value(reg1)); break;
+        case 0b00110: set_register_value(reg1, value); break;
+        case 0b00111: set_register_value(reg1, read_memory(addr)); break;
+        case 0b01000: write_memory(addr, get_register_value(reg1)); break;
 
-        case 0b01001: /* INC */ set_register_value(reg1, get_register_value(reg1) + 1); break;
-        case 0b01010: /* DEC */ set_register_value(reg1, get_register_value(reg1) - 1); break;
+        // Arithmetic
+        case 0b01001: set_register_value(reg1, get_register_value(reg1) + 1); break;
+        case 0b01010: set_register_value(reg1, get_register_value(reg1) - 1); break;
+        case 0b10000: set_register_value(reg1, get_register_value(reg1) + get_register_value(reg2)); break;
+        case 0b10001: set_register_value(reg1, get_register_value(reg1) - get_register_value(reg2)); break;
+        case 0b10010: set_register_value(reg1, get_register_value(reg2)); break;
 
-        case 0b10000: /* ADD */ set_register_value(reg1, get_register_value(reg1) + get_register_value(reg2)); break;
-        case 0b10001: /* SUB */ set_register_value(reg1, get_register_value(reg1) - get_register_value(reg2)); break;
-        case 0b10010: /* MOV */ set_register_value(reg1, get_register_value(reg2)); break;
+        // Logical & Immediate Arithmetic
+        case 0b10011: set_register_value(reg1, get_register_value(reg1) + value); break;
+        case 0b10100: set_register_value(reg1, get_register_value(reg1) - value); break;
+        case 0b10101: {
+            int result = get_register_value(reg1) - value;
+            flags.ZF = (result == 0);
+            flags.SF = (result < 0);
+            break;
+        }
+        case 0b10110: set_register_value(reg1, ~get_register_value(reg1)); break;
 
-        case 0b11000: /* JMP */ return addr;
-        case 0b11001: /* JZ  */ if (get_register_value(reg1) == 0) return addr; break;
-        case 0b11010: /* JNZ */ if (get_register_value(reg1) != 0) return addr; break;
-        case 0b11011: /* JP  */ if (get_register_value(reg1) > 0)  return addr; break;
-        case 0b11100: /* JN  */ if (get_register_value(reg1) < 0)  return addr; break;
+        // Comparison & Jumps
+        case 0b10111: {
+            int result = get_register_value(reg1) - get_register_value(reg2);
+            flags.ZF = (result == 0);
+            flags.SF = (result < 0);
+            break;
+        }
+        case 0b11000: return addr;
+        case 0b11001: if (flags.ZF) return addr; break;
+        case 0b11010: if (!flags.ZF) return addr; break;
+        case 0b11011: if (!flags.ZF && !flags.SF) return addr; break;
+        case 0b11100: if (flags.SF) return addr; break;
+        case 0b11101: if (!flags.SF) return addr; break;
+        case 0b11110: if (flags.ZF || flags.SF) return addr; break;
+
+        // Stack & Functions
+        case 0b01011: registers.ESP--; write_memory(registers.ESP, get_register_value(reg1)); break;
+        case 0b01100: set_register_value(reg1, read_memory(registers.ESP)); registers.ESP++; break;
+        case 0b01101: registers.ESP--; write_memory(registers.ESP, pc + 1); return addr;
+        case 0b01110: {
+            int ret_addr = read_memory(registers.ESP);
+            registers.ESP++;
+            return ret_addr;
+        }
 
         default:
             fprintf(stderr, "[Runtime Error] Unknown opcode 0x%X at PC %d.\n", opcode, pc);
-            return -1; // Halt on unknown instruction
+            return -1; // Halt on unknown instruction.
     }
 
-    return pc + 1; // Default: advance to next instruction
+    return pc + 1; // Advance to the next instruction.
 }
 
 
 // --- Utility Functions ---
 int get_register_value(int reg_code) {
-    if (reg_code == 0) return registers.A;
-    if (reg_code == 1) return registers.B;
-    if (reg_code == 2) return registers.C;
-    return 0;
+    switch (reg_code) {
+        case 0: return registers.EAX;
+        case 1: return registers.EBX;
+        case 2: return registers.ECX;
+        case 3: return registers.EDX;
+        case 4: return registers.ESI;
+        case 5: return registers.EDI;
+        case 6: return registers.EBP;
+        case 7: return registers.ESP;
+        default: return 0;
+    }
 }
 
 void set_register_value(int reg_code, int value) {
-    if (reg_code == 0) registers.A = value;
-    else if (reg_code == 1) registers.B = value;
-    else if (reg_code == 2) registers.C = value;
+    switch (reg_code) {
+        case 0: registers.EAX = value; break;
+        case 1: registers.EBX = value; break;
+        case 2: registers.ECX = value; break;
+        case 3: registers.EDX = value; break;
+        case 4: registers.ESI = value; break;
+        case 5: registers.EDI = value; break;
+        case 6: registers.EBP = value; break;
+        case 7: registers.ESP = value; break;
+    }
 }
 
 void write_memory(int address, int data) {
@@ -181,7 +246,9 @@ int read_memory(int address) {
 
 void dump_contents() {
     printf("\n--- CPU State Dump ---\n");
-    printf("Registers: A=%-5d B=%-5d C=%-5d\n", registers.A, registers.B, registers.C);
+    printf("Registers: EAX=%-5d EBX=%-5d ECX=%-5d EDX=%-5d\n", registers.EAX, registers.EBX, registers.ECX, registers.EDX);
+    printf("           ESI=%-5d EDI=%-5d EBP=%-5d ESP=%-5d\n", registers.ESI, registers.EDI, registers.EBP, registers.ESP);
+    printf("Flags:     ZF=%d SF=%d\n", flags.ZF, flags.SF);
     printf("Memory Contents (%d words):\n", MEMORY_SIZE);
     for (int i = 0; i < MEMORY_SIZE; ++i) {
         if (i % 8 == 0) printf("  [%02d]:", i);

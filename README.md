@@ -5,14 +5,25 @@ A project consisting of two C programs: an assembler and a simulator for a custo
 *   `assembler.exe`: Compiles human-readable assembly language into a binary machine code format.
 *   `simulator.exe`: Loads and executes the binary files, simulating the CPU's behavior and running the compiled program.
 
-## Core Concepts
+Example usage:
 
-*   **Registers:** The CPU has three general-purpose integer registers: `A`, `B`, `C`.
-*   **Memory:** Main memory consists of `MEMORY_SIZE` (default 64) integer words, addressed from `0` to `MEMORY_SIZE - 1`.
-*   **Immediate Values:** Literal numeric values. In this instruction set, immediate values must be prefixed with a hash symbol (`#`). For example: `#42`.
-*   **Labels:** You can mark a line of code with a label by writing a name followed by a colon (e.g., `my_loop:`). Labels provide a convenient way to refer to an address for jump instructions, which is much easier than manually counting lines.
-*   **Comments:** Lines starting with a semicolon (`;`) are treated as comments and are ignored by the assembler.
-*   **Operands:** Operands are separated by spaces or commas (e.g., `ADD A, B` and `ADD A B` are both valid).
+```bash
+gcc assembler.c -o assembler
+gcc simulator.c -o simulator
+./assembler program.txt program.bin
+./simulator program.bin
+```
+
+## Core
+
+*   **Registers:** The CPU has 8 general-purpose registers: `EAX`, `EBX`, `ECX`, `EDX`, `ESI`, `EDI`, `EBP`, `ESP`.
+*   **Memory:** Main memory consists of `MEMORY_SIZE` (default 256) integer words.
+*   **Stack:** The stack grows downwards from the top of memory. `ESP` is the stack pointer and `EBP` is the base pointer.
+*   **Flags:** The CPU has a Zero Flag (`ZF`) and a Sign Flag (`SF`) which are set by comparison instructions.
+*   **Immediate Values:** Literal numeric values, prefixed with a hash symbol (`#`). Example: `#42`.
+*   **Labels:** Mark a line of code with a label by writing a name followed by a colon (e.g., `my_loop:`).
+*   **Comments:** Lines starting with a semicolon (`;`) are comments.
+*   **Operands:** Operands can be separated by spaces or commas.
 
 ---
 
@@ -20,194 +31,145 @@ A project consisting of two C programs: an assembler and a simulator for a custo
 
 ### Data Movement Instructions
 
-1.  **`SET <register> #<value>`**
-    *   **Syntax:** `SET A, #100`
-    *   **Description:** Sets the specified `<register>` to the integer `<value>`.
-    *   **Operands:**
-        *   `<register>`: The destination register (A, B, or C).
-        *   `#<value>`: An integer value, prefixed with `#`.
-
-2.  **`STA <register> <address>`**
-    *   **Syntax:** `STA A, 5`
-    *   **Description:** Stores the value from the source `<register>` into the memory location specified by `<address>`.
-    *   **Operands:**
-        *   `<register>`: The source register (A, B, C) whose value will be stored.
-        *   `<address>`: The memory address (0 to MEMORY\_SIZE-1) or a label.
-
-3.  **`LDA <register> <address>`**
-    *   **Syntax:** `LDA B, 5`
-    *   **Description:** Loads the value from the memory location specified by `<address>` into the `<register>`.
-    *   **Operands:**
-        *   `<register>`: The destination register (A, B, or C).
-        *   `<address>`: The memory address (0 to MEMORY\_SIZE-1) or a label to read from.
-
-4.  **`MOV <reg_dest> <reg_src>`**
-    *   **Syntax:** `MOV A, B`
-    *   **Description:** Copies the value from `<reg_src>` to `<reg_dest>`.
-    *   **Operands:**
-        *   `<reg_dest>`: The destination register (A, B, C).
-        *   `<reg_src>`: The source register (A, B, C).
+1.  **`MOV <dest>, <src>`**
+    *   **Description:** Copies data from a source to a destination. This is a versatile instruction with multiple forms.
+    *   **Forms:**
+        *   `MOV <reg>, #<imm>`: Move immediate value to register. (e.g., `MOV EAX, #100`)
+        *   `MOV <reg>, <reg>`: Copy value from one register to another. (e.g., `MOV EAX, EBX`)
+        *   `MOV <reg>, [<addr>]`: Load value from a memory address to a register. (e.g., `MOV EAX, [10]`)
+        *   `MOV [<addr>], <reg>`: Store value from a register to a memory address. (e.g., `MOV [10], EAX`)
+        *   `MOV <reg>, [<reg>+<offset>]`: Load with base+offset addressing. (e.g., `MOV EAX, [EBP+4]`)
+        *   `MOV [<reg>+<offset>], <reg>`: Store with base+offset addressing. (e.g., `MOV [EBP-8], ECX`)
 
 ### Input/Output Instructions
 
-5.  **`INP <register>`**
-    *   **Syntax:** `INP A`
-    *   **Description:** Prompts the user for an integer input and stores it in the specified `<register>`.
-    *   **Operands:**
-        *   `<register>`: The register (A, B, or C) to store the input.
+2.  **`INP <register>`**
+    *   **Description:** Prompts for user input and stores it in a register. (e.g., `INP EAX`)
 
-6.  **`OUT <register>`**
-    *   **Syntax:** `OUT A`
-    *   **Description:** Prints the integer value of the specified `<register>` to the console.
-    *   **Operands:**
-        *   `<register>`: The register (A, B, or C) whose value is to be printed.
+3.  **`OUT <register>`**
+    *   **Description:** Prints the value of a register to the console. (e.g., `OUT EAX`)
 
 ### Arithmetic Instructions
 
-7.  **`ADD <reg_dest> <reg_src>`**
-    *   **Syntax:** `ADD A, B`
-    *   **Description:** Adds the value of `<reg_src>` to `<reg_dest>` and stores the result in `<reg_dest>`.
-    *   **Operands:**
-        *   `<reg_dest>`: The register that acts as the first operand and destination.
-        *   `<reg_src>`: The register whose value is added.
+4.  **`ADD <reg>, <reg|#imm>`**
+    *   **Description:** Adds the second operand to the first, storing the result in the first.
+    *   **Forms:**
+        *   `ADD <reg>, <reg>` (e.g., `ADD EAX, EBX`)
+        *   `ADD <reg>, #<imm>` (e.g., `ADD ECX, #5`)
 
-8.  **`SUB <reg_dest> <reg_src>`**
-    *   **Syntax:** `SUB A, B`
-    *   **Description:** Subtracts the value of `<reg_src>` from `<reg_dest>` and stores the result in `<reg_dest>`.
-    *   **Operands:**
-        *   `<reg_dest>`: The register to be subtracted from and store the result.
-        *   `<reg_src>`: The register whose value is subtracted.
+5.  **`SUB <reg>, <reg|#imm>`**
+    *   **Description:** Subtracts the second operand from the first, storing the result in the first.
+    *   **Forms:**
+        *   `SUB <reg>, <reg>` (e.g., `SUB EAX, EBX`)
+        *   `SUB <reg>, #<imm>` (e.g., `SUB ECX, #5`)
 
-9.  **`INC <register>`**
-    *   **Syntax:** `INC A`
-    *   **Description:** Increments the value of the specified `<register>` by 1.
-    *   **Operands:**
-        *   `<register>`: The register (A, B, or C) to increment.
+6.  **`MUL <reg>, <reg>`**
+    *   **Description:** Multiplies two registers, storing the result in the first. (e.g., `MUL EAX, EBX`)
 
-10. **`DEC <register>`**
-    *   **Syntax:** `DEC A`
-    *   **Description:** Decrements the value of the specified `<register>` by 1.
-    *   **Operands:**
-        *   `<register>`: The register (A, B, or C) to decrement.
+7.  **`DIV <reg>, <reg>`**
+    *   **Description:** Divides the first register by the second, storing the result in the first. (e.g., `DIV EAX, EBX`)
+
+8.  **`INC <register>`**
+    *   **Description:** Increments a register by 1. (e.g., `INC EAX`)
+
+9.  **`DEC <register>`**
+    *   **Description:** Decrements a register by 1. (e.g., `DEC EAX`)
+
+### Logical Instructions
+
+10. **`XOR <reg>, <reg>`**
+    *   **Description:** Performs a bitwise XOR, storing the result in the first register. (e.g., `XOR EAX, EBX`)
+
+11. **`NOT <register>`**
+    *   **Description:** Performs a bitwise NOT on the register. (e.g., `NOT EAX`)
+
+### Comparison
+
+12. **`CMP <reg>, <reg|#imm>`**
+    *   **Description:** Compares two operands and sets the `ZF` and `SF` flags. Does not modify operands.
+    *   **Forms:**
+        *   `CMP <reg>, <reg>` (e.g., `CMP EAX, EBX`)
+        *   `CMP <reg>, #<imm>` (e.g., `CMP ECX, #10`)
 
 ### Control Flow Instructions
 
-11. **`JMP <address_or_label>`**
-    *   **Syntax:** `JMP 5` or `JMP my_loop`
-    *   **Description:** Unconditionally jumps execution to the specified address or label.
-    *   **Operands:**
-        *   `<address_or_label>`: A 0-indexed line number or a defined label.
+13. **`JMP <address_or_label>`**
+    *   **Description:** Unconditionally jumps to a target address or label. (e.g., `JMP my_loop`)
 
-12. **`JZ <register>, <address_or_label>`**
-    *   **Syntax:** `JZ A, 10` or `JZ B, end_loop`
-    *   **Description:** Jumps to the specified address or label if the value of the `<register>` is zero.
-    *   **Operands:**
-        *   `<register>`: The register (A, B, C) to check. **This is not optional.**
-        *   `<address_or_label>`: The target to jump to if the condition is true.
+14. **Conditional Jumps**
+    *   **Description:** Jumps to a target if a condition based on the flags is met.
+    *   **Instructions:**
+        *   `JE` / `JZ`: Jump if Equal / Jump if Zero (`ZF=1`)
+        *   `JNE` / `JNZ`: Jump if Not Equal / Jump if Not Zero (`ZF=0`)
+        *   `JG` / `JNLE`: Jump if Greater (`ZF=0` and `SF=0`)
+        *   `JL` / `JNGE`: Jump if Less (`SF=1`)
+        *   `JGE` / `JNL`: Jump if Greater or Equal (`SF=0`)
+        *   `JLE` / `JNG`: Jump if Less or Equal (`ZF=1` or `SF=1`)
 
-13. **`JNZ <register>, <address_or_label>`**
-    *   **Syntax:** `JNZ C, countdown`
-    *   **Description:** Jumps if the value of the `<register>` is **not** zero.
-    *   **Operands:**
-        *   `<register>`: The register (A, B, C) to check. **This is not optional.**
-        *   `<address_or_label>`: The target to jump to.
+### Stack & Function Instructions
 
-14. **`JP <register>, <address_or_label>`**
-    *   **Syntax:** `JP A, is_positive`
-    *   **Description:** Jumps if the value of the `<register>` is positive (> 0).
-    *   **Operands:**
-        *   `<register>`: The register (A, B, C) to check. **This is not optional.**
-        *   `<address_or_label>`: The target to jump to.
+15. **`PUSH <register>`**
+    *   **Description:** Pushes a register's value onto the stack. (e.g., `PUSH EAX`)
 
-15. **`JN <register>, <address_or_label>`**
-    *   **Syntax:** `JN B, is_negative`
-    *   **Description:** Jumps if the value of the `<register>` is negative (< 0).
-    *   **Operands:**
-        *   `<register>`: The register (A, B, C) to check. **This is not optional.**
-        *   `<address_or_label>`: The target to jump to.
+16. **`POP <register>`**
+    *   **Description:** Pops a value from the stack into a register. (e.g., `POP EAX`)
 
-### Utility/Control Instructions
+17. **`CALL <address_or_label>`**
+    *   **Description:** Pushes the return address onto the stack and jumps to a function. (e.g., `CALL my_function`)
 
-16. **`CLRR`**
-    *   **Syntax:** `CLRR`
-    *   **Description:** Clears **all** general-purpose registers (A, B, and C) to zero. Takes no operands.
-    *   **Operands:** None.
+18. **`RET`**
+    *   **Description:** Pops the return address from the stack and jumps to it.
 
-17. **`CLRM`**
-    *   **Syntax:** `CLRM`
-    *   **Description:** Clears **all** of main memory to zero. Takes no operands.
-    *   **Operands:** None.
-
-18. **`DMP`**
-    *   **Syntax:** `DMP`
-    *   **Description:** Dumps the current state of all CPU registers and main memory to the console.
-    *   **Operands:** None.
+### System Instructions
 
 19. **`HLT`**
-    *   **Syntax:** `HLT`
     *   **Description:** Halts program execution.
-    *   **Operands:** None.
 
 ---
 
 ## Example Program (`program.txt`)
 
-This example demonstrates correct syntax, comments, and the use of labels.
+This example demonstrates the architecture.
 
 ```assembly
 ; --- Example Program for the CPUsim Toolchain ---
-; This program takes two numbers, adds them, performs a countdown,
-; and demonstrates conditional jumps.
+; This program calculates the factorial of a number using a recursive function.
 
-; Get user input and add two numbers
-INP A
-INP B
-ADD A, B
-OUT A
+; --- Main Program ---
+main:
+  MOV EAX, #5          ; Set the number to calculate the factorial of (e.g., 5)
+  PUSH EAX             ; Push the argument onto the stack
+  CALL factorial       ; Call the factorial function
+  POP EAX              ; Clean up the stack (the argument)
+  OUT EAX              ; Print the result
+  HLT                  ; Halt the program
 
-; Store the result in memory at address 10, then load it into C and print
-STA A, 10
-LDA C, 10
-OUT C
+; --- Factorial Function ---
+; Calculates the factorial of the number passed on the stack.
+; Argument: n (at [EBP+2])
+; Returns: factorial(n) in EAX
+factorial:
+  ; --- Function Prologue ---
+  PUSH EBP             ; Save the old base pointer
+  MOV EBP, ESP         ; Set up the new stack frame
 
-; Demonstrate setting an immediate value and storing it
-SET A, #123
-STA A, 11
-LDA B, 11
-OUT B
+  ; --- Base Case ---
+  MOV EAX, [EBP+2]     ; Get the argument n
+  CMP EAX, #1          ; Compare n with 1
+  JLE end_factorial    ; If n <= 1, jump to the end (return 1)
 
-; Demonstrate simple arithmetic
-SET A, #20
-MOV B, A
-INC B
-DEC A
-SUB B, A
-OUT B
+  ; --- Recursive Step ---
+  DEC EAX              ; n - 1
+  PUSH EAX             ; Push (n - 1) as the argument for the recursive call
+  CALL factorial       ; factorial(n - 1)
+  POP EBX              ; Clean up the stack (the argument)
 
-; --- Countdown Loop using a Label ---
-SET C, #3       ; Initialize counter outside the loop
+  MOV EBX, [EBP+2]     ; Get the original n again
+  MUL EAX, EBX         ; result = n * factorial(n - 1)
 
-countdown_loop:
-  OUT C           ; Print the current counter value
-  DEC C           ; Decrement the counter
-  JNZ C, countdown_loop  ; If C is not zero, jump back to the label
-
-; After the loop finishes, C is 0. This line will print 0.
-OUT C
-
-; --- Conditional Jump Demo ---
-SET A, #0
-SET B, #77
-
-; Since A is zero, this jump will be taken, skipping the next two OUT instructions
-JZ A, skip_print
-
-; These lines are skipped
-OUT B
-OUT A
-
-skip_print:
-  CLRM            ; Clear all of memory
-  DMP             ; Dump the final state of registers and memory
-  HLT             ; End of program
+end_factorial:
+  ; --- Function Epilogue ---
+  MOV ESP, EBP         ; Restore the stack pointer
+  POP EBP              ; Restore the old base pointer
+  RET                  ; Return to the caller
 ```

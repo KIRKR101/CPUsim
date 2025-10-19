@@ -1,39 +1,39 @@
-INP A
-INP B
-ADD A, B
-OUT A
-STA A, 10
+; This program calculates the factorial of a number using a recursive function.
 
-SET C, #0
-LDA C, 10
-OUT C
+; --- Main Program ---
+main:
+  MOV EAX, #5          ; Set the number to calculate the factorial of (e.g., 5)
+  PUSH EAX             ; Push the argument onto the stack
+  CALL factorial       ; Call the factorial function
+  POP EBX              ; Clean up the stack (the argument), saving the result in EAX.
+  OUT EAX              ; Print the result
+  HLT                  ; Halt the program
 
-SET A, #123
-STA A, 11
-LDA B, 11
-OUT B
+; --- Factorial Function ---
+; Calculates the factorial of the number passed on the stack.
+; Argument: n (at [EBP+2])
+; Returns: factorial(n) in EAX
+factorial:
+  ; --- Function Prologue ---
+  PUSH EBP             ; Save the old base pointer
+  MOV EBP, ESP         ; Set up the new stack frame
 
-SET A, #20
-MOV B, A
-INC B
-DEC A
-SUB B, A
-OUT B
+  ; --- Base Case ---
+  MOV EAX, [EBP+2]     ; Get the argument n
+  CMP EAX, #1          ; Compare n with 1
+  JLE end_factorial    ; If n <= 1, jump to the end (return 1)
 
-SET C, #3
+  ; --- Recursive Step ---
+  DEC EAX              ; n - 1
+  PUSH EAX             ; Push (n - 1) as the argument for the recursive call
+  CALL factorial       ; factorial(n - 1)
+  POP EBX              ; Clean up the stack (the argument)
 
-OUT C
-DEC C
-JNZ C, 19
+  MOV EBX, [EBP+2]     ; Get the original n again
+  MUL EAX, EBX         ; result = n * factorial(n - 1)
 
-OUT C 
-
-SET A, #0
-SET B, #77
-JZ A, 27
-OUT B            
-OUT A            
-
-CLRM             
-DMP
-HLT
+end_factorial:
+  ; --- Function Epilogue ---
+  MOV ESP, EBP         ; Restore the stack pointer
+  POP EBP              ; Restore the old base pointer
+  RET                  ; Return to the caller

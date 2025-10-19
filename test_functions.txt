@@ -1,0 +1,112 @@
+; This program tests new and existing instructions to ensure the CPU
+; is functioning correctly.
+
+; --- Main Program Logic ---
+main:
+    ; --- Test 1: MOV and ADD ---
+    MOV EAX, #10
+    MOV EBX, #5
+    ADD EAX, EBX     ; EAX = 10 + 5 = 15
+    CMP EAX, #15
+    JNE failure
+
+    ; --- Test 2: SUB ---
+    MOV EAX, #15
+    MOV EBX, #5
+    SUB EAX, EBX     ; EAX = 15 - 5 = 10
+    CMP EAX, #10
+    JNE failure
+
+    ; --- Test 3: INC and DEC ---
+    MOV EAX, #10
+    INC EAX          ; EAX = 11
+    CMP EAX, #11
+    JNE failure
+    DEC EAX          ; EAX = 10
+    CMP EAX, #10
+    JNE failure
+
+    ; --- Test 4: MUL ---
+    MOV EAX, #6
+    MOV EBX, #7
+    MUL EAX, EBX     ; EAX = 6 * 7 = 42
+    CMP EAX, #42
+    JNE failure
+
+    ; --- Test 5: DIV ---
+    MOV EAX, #42
+    MOV EBX, #2
+    DIV EAX, EBX     ; EAX = 42 / 2 = 21
+    CMP EAX, #21
+    JNE failure
+
+    ; --- Test 6: XOR ---
+    MOV EAX, #12     ; 1100
+    MOV EBX, #5      ; 0101
+    XOR EAX, EBX     ; EAX = 1100 ^ 0101 = 1001 (9)
+    CMP EAX, #9
+    JNE failure
+
+    ; --- Test 7: Jumps (JG, JL, JGE, JLE, JE, JNE) ---
+    MOV EAX, #10
+    MOV EBX, #5
+    CMP EAX, EBX
+    JG jg_pass
+    JMP failure
+jg_pass:
+    JL jl_fail
+    JMP jl_pass
+jl_fail:
+    JMP failure
+jl_pass:
+    JGE jge_pass
+    JMP failure
+jge_pass:
+    JLE jle_fail
+    JMP jle_pass
+jle_fail:
+    JMP failure
+jle_pass:
+    CMP EAX, #10
+    JE je_pass
+    JMP failure
+je_pass:
+    JNE jne_fail
+    JMP jne_pass
+jne_fail:
+    JMP failure
+jne_pass:
+
+    ; --- Test 8: PUSH and POP ---
+    MOV EAX, #123
+    PUSH EAX
+    POP EBX
+    CMP EBX, #123
+    JNE failure
+
+    ; --- Test 9: CALL and RET ---
+    CALL test_function
+    CMP EAX, #50
+    JNE failure
+
+    ; --- If all tests pass, jump to success ---
+    JMP success
+
+test_function:
+    MOV EAX, #50
+    RET
+
+success:
+    ; Output success code (1)
+    MOV ECX, #1
+    OUT ECX
+    JMP end_program
+
+failure:
+    ; Output failure code (0)
+    MOV ECX, #0
+    OUT ECX
+    JMP end_program
+
+end_program:
+    HLT
